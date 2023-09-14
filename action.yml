@@ -3,7 +3,7 @@ author: "1fexd"
 description: "Build release notes for nightly builds"
 
 runs:
-  using: "node16"
+  using: "node20"
   main: "dist/index.js"
 
 branding:
