@@ -1,0 +1,11 @@
+name: "Nightly release notes"
+author: "1fexd"
+description: "Build release notes for nightly builds"
+
+runs:
+  using: "node16"
+  main: "dist/index.js"
+
+branding:
+  icon: "list"
+  color: "green"
