@@ -4244,7 +4244,7 @@ function run() {
         const commits = compared.commits.reverse();
         const releaseLines = ["# Included commits", ""];
         for (let commit of commits) {
-            releaseLines.push(`* [${shortCommitSha(commit.sha)}: ${commit.commit.message}](${commit.commit.url})`);
+            releaseLines.push(`* [${shortCommitSha(commit.sha)}: ${commit.commit.message}](https://github.com/${stableOwner}/${stableRepo}/compare/${LAST_COMMIT_SHA}...${shortCommitSha(COMMIT_SHA)})`);
         }
         releaseLines.push("");
         releaseLines.push(`Difference to latest stable release: [${shortCommitSha(latestStableRelease.tagName)}...${shortCommitSha(COMMIT_SHA)}](https://github.com/${stableOwner}/${stableRepo}/compare/${latestStableRelease.tagName}...${COMMIT_SHA})`);
