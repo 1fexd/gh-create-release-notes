@@ -1,6 +1,6 @@
 {
   "name": "gh-create-release-notes",
-  "version": "1.0.0",
+  "version": "0.0.4",
   "description": "gh-create-release-notes",
   "main": "lib/main.js",
   "scripts": {
