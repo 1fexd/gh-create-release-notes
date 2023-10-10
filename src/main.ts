@@ -111,7 +111,7 @@ async function run(): Promise<void> {
   const releaseLines = ["# Included commits", ""];
 
   for (let commit of commits) {
-    releaseLines.push(`* [${shortCommitSha(commit.sha)}: ${commit.commit.message}](https://github.com/${stableOwner}/${stableRepo}/compare/${LAST_COMMIT_SHA}...${shortCommitSha(COMMIT_SHA)})`);
+    releaseLines.push(`* [${shortCommitSha(commit.sha)}: ${commit.commit.message.replace("\n\n", ", ")}](https://github.com/${stableOwner}/${stableRepo}/compare/${LAST_COMMIT_SHA}...${shortCommitSha(COMMIT_SHA)})`);
   }
 
   releaseLines.push("");
