@@ -12,13 +12,13 @@ const HOME = os.homedir();
 
 type LatestReleaseCommitSha = {
   repository: {
-    latestRelease: {
-      tagCommit: {
-        oid: string
-      } | null,
-      tagName: string | null
-    }
+    latestRelease: Release
   }
+}
+
+type Release = {
+  tagCommit: { oid: string } | null,
+  tagName: string | null
 }
 
 type Commit = {
@@ -36,7 +36,7 @@ type CommitCompare = {
   commits: Commit[]
 }
 
-async function queryLatestRelease(octokit: Octokit, owner: string, repo: string) {
+async function queryLatestRelease(octokit: Octokit, owner: string, repo: string): Promise<Release | null> {
   return (await octokit.graphql<LatestReleaseCommitSha>(
       `query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
           repository(owner: $owner, name: $repo) {
@@ -44,7 +44,7 @@ async function queryLatestRelease(octokit: Octokit, owner: string, repo: string)
                   tagCommit {
                       oid
                   }
-                  
+
                   tagName
               }
           }
@@ -85,9 +85,8 @@ async function run(): Promise<void> {
   core.info(`${stableOwner}/${stableRepo}`);
 
   const latestStableRelease = await queryLatestRelease(octokit, stableOwner, stableRepo);
-  if (!latestStableRelease.tagCommit) {
-    core.error("No latest release in stable repo found!");
-    return;
+  if (latestStableRelease === null) {
+    core.warning("No latest release in stable repo found!");
   }
 
   const nightlySplit = NIGHTLY_REPO.split("/");
@@ -114,8 +113,11 @@ async function run(): Promise<void> {
     releaseLines.push(`* [${shortCommitSha(commit.sha)}: ${commit.commit.message.replace("\n\n", ", ")}](https://github.com/${stableOwner}/${stableRepo}/compare/${LAST_COMMIT_SHA}...${shortCommitSha(COMMIT_SHA)})`);
   }
 
-  releaseLines.push("");
-  releaseLines.push(`Difference to latest stable release: [${shortCommitSha(latestStableRelease.tagName!)}...${shortCommitSha(COMMIT_SHA)}](https://github.com/${stableOwner}/${stableRepo}/compare/${latestStableRelease.tagName}...${COMMIT_SHA})`);
+  if (latestStableRelease !== null) {
+    releaseLines.push("");
+    releaseLines.push(`Difference to latest stable release: [${shortCommitSha(latestStableRelease.tagName!)}...${shortCommitSha(COMMIT_SHA)}](https://github.com/${stableOwner}/${stableRepo}/compare/${latestStableRelease.tagName}...${COMMIT_SHA})`);
+
+  }
 
   const releaseMessage = releaseLines.join("\n");
 
