@@ -4190,7 +4190,7 @@ function queryLatestRelease(octokit, owner, repo) {
                   tagCommit {
                       oid
                   }
-                  
+
                   tagName
               }
           }
@@ -4224,9 +4224,8 @@ function run() {
         const stableRepo = stableSplit[1];
         core.info(`${stableOwner}/${stableRepo}`);
         const latestStableRelease = yield queryLatestRelease(octokit, stableOwner, stableRepo);
-        if (!latestStableRelease.tagCommit) {
-            core.error("No latest release in stable repo found!");
-            return;
+        if (latestStableRelease === null) {
+            core.warning("No latest release in stable repo found!");
         }
         const nightlySplit = NIGHTLY_REPO.split("/");
         const nightlyOwner = nightlySplit[0];
@@ -4246,8 +4245,10 @@ function run() {
         for (let commit of commits) {
             releaseLines.push(`* [${shortCommitSha(commit.sha)}: ${commit.commit.message.replace("\n\n", ", ")}](https://github.com/${stableOwner}/${stableRepo}/compare/${LAST_COMMIT_SHA}...${shortCommitSha(COMMIT_SHA)})`);
         }
-        releaseLines.push("");
-        releaseLines.push(`Difference to latest stable release: [${shortCommitSha(latestStableRelease.tagName)}...${shortCommitSha(COMMIT_SHA)}](https://github.com/${stableOwner}/${stableRepo}/compare/${latestStableRelease.tagName}...${COMMIT_SHA})`);
+        if (latestStableRelease !== null) {
+            releaseLines.push("");
+            releaseLines.push(`Difference to latest stable release: [${shortCommitSha(latestStableRelease.tagName)}...${shortCommitSha(COMMIT_SHA)}](https://github.com/${stableOwner}/${stableRepo}/compare/${latestStableRelease.tagName}...${COMMIT_SHA})`);
+        }
         const releaseMessage = releaseLines.join("\n");
         core.info(releaseMessage);
         core.setOutput("releaseNote", releaseMessage);
