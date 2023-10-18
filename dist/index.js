@@ -4243,7 +4243,7 @@ function run() {
         const commits = compared.commits.reverse();
         const releaseLines = ["# Included commits", ""];
         for (let commit of commits) {
-            releaseLines.push(`* [${shortCommitSha(commit.sha)}: ${commit.commit.message.replace("\n\n", ", ")}](https://github.com/${stableOwner}/${stableRepo}/compare/${LAST_COMMIT_SHA}...${shortCommitSha(COMMIT_SHA)})`);
+            releaseLines.push(`* [${shortCommitSha(commit.sha)}: ${commit.commit.message.replace("\n", ", ").replace("\r", "")}](https://github.com/${stableOwner}/${stableRepo}/compare/${LAST_COMMIT_SHA}...${shortCommitSha(COMMIT_SHA)})`);
         }
         if (latestStableRelease !== null) {
             releaseLines.push("");
