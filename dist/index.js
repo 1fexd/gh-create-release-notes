@@ -4163,15 +4163,6 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
 const os = __importStar(__nccwpck_require__(2037));
@@ -4182,77 +4173,104 @@ const NIGHTLY_REPO = core.getInput("nightly-repo") || process.env["NIGHTLY_REPO"
 const LAST_COMMIT_SHA = core.getInput("last-commit-sha") || process.env["LAST_COMMIT_SHA"];
 const COMMIT_SHA = core.getInput("commit-sha") || process.env["COMMIT_SHA"];
 const HOME = os.homedir();
-function queryLatestRelease(octokit, owner, repo) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return (yield octokit.graphql(`query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
-          repository(owner: $owner, name: $repo) {
-              latestRelease {
-                  tagCommit {
-                      oid
-                  }
+async function queryLatestRelease(octokit, owner, repo) {
+    return (await octokit.graphql(`query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
+            repository(owner: $owner, name: $repo) {
+                latestRelease {
+                    tagCommit {
+                        oid
+                    }
 
-                  tagName
-              }
-          }
-      }`, { owner: owner, repo: repo })).repository.latestRelease;
-    });
+                    tagName
+                }
+            }
+        }`, { owner: owner, repo: repo })).repository.latestRelease;
 }
-function shortCommitSha(sha) {
+function truncateSha(sha) {
     return sha.substring(0, 7);
 }
-function run() {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (!STABLE_REPO) {
-            core.error(`Input "STABLE_REPO" not provided`);
-            return;
+async function run() {
+    if (!STABLE_REPO) {
+        core.error(`Input "STABLE_REPO" not provided`);
+        return;
+    }
+    if (!NIGHTLY_REPO) {
+        core.error(`Input "NIGHTLY_REPO" not provided`);
+        return;
+    }
+    if (!COMMIT_SHA) {
+        core.error(`Input "COMMIT_SHA" not provided`);
+        return;
+    }
+    if (!LAST_COMMIT_SHA) {
+        core.error(`Input "LAST_COMMIT_SHA" not provided`);
+        return;
+    }
+    const octokit = new core_1.Octokit({ auth: GITHUB_TOKEN });
+    const stableSplit = STABLE_REPO.split("/");
+    const stableOwner = stableSplit[0];
+    const stableRepo = stableSplit[1];
+    core.info(`${stableOwner}/${stableRepo}`);
+    const latestStableRelease = await queryLatestRelease(octokit, stableOwner, stableRepo);
+    if (latestStableRelease === null) {
+        core.warning("No latest release in stable repo found!");
+    }
+    const nightlySplit = NIGHTLY_REPO.split("/");
+    const nightlyOwner = nightlySplit[0];
+    const nightlyRepo = nightlySplit[1];
+    core.info(`${nightlyOwner}/${nightlyRepo}`);
+    const response = await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+        owner: stableOwner,
+        repo: stableRepo,
+        basehead: `${LAST_COMMIT_SHA}...${COMMIT_SHA}`,
+        headers: {
+            "X-GitHub-Api-Version": "2022-11-28"
         }
-        if (!NIGHTLY_REPO) {
-            core.error(`Input "NIGHTLY_REPO" not provided`);
-            return;
-        }
-        if (!COMMIT_SHA) {
-            core.error(`Input "COMMIT_SHA" not provided`);
-            return;
-        }
-        if (!LAST_COMMIT_SHA) {
-            core.error(`Input "LAST_COMMIT_SHA" not provided`);
-            return;
-        }
-        const octokit = new core_1.Octokit({ auth: GITHUB_TOKEN });
-        const stableSplit = STABLE_REPO.split("/");
-        const stableOwner = stableSplit[0];
-        const stableRepo = stableSplit[1];
-        core.info(`${stableOwner}/${stableRepo}`);
-        const latestStableRelease = yield queryLatestRelease(octokit, stableOwner, stableRepo);
-        if (latestStableRelease === null) {
-            core.warning("No latest release in stable repo found!");
-        }
-        const nightlySplit = NIGHTLY_REPO.split("/");
-        const nightlyOwner = nightlySplit[0];
-        const nightlyRepo = nightlySplit[1];
-        core.info(`${nightlyOwner}/${nightlyRepo}`);
-        const response = yield octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
-            owner: stableOwner,
-            repo: stableRepo,
-            basehead: `${LAST_COMMIT_SHA}...${COMMIT_SHA}`,
-            headers: {
-                "X-GitHub-Api-Version": "2022-11-28"
-            }
-        });
-        const compared = response.data;
-        const commits = compared.commits.reverse();
-        const releaseLines = ["# Included commits", ""];
-        for (let commit of commits) {
-            releaseLines.push(`* [${shortCommitSha(commit.sha)}: ${commit.commit.message.replace("\n", ", ").replace("\r", "")}](https://github.com/${stableOwner}/${stableRepo}/compare/${LAST_COMMIT_SHA}...${shortCommitSha(COMMIT_SHA)})`);
-        }
-        if (latestStableRelease !== null) {
-            releaseLines.push("");
-            releaseLines.push(`Difference to latest stable release: [${shortCommitSha(latestStableRelease.tagName)}...${shortCommitSha(COMMIT_SHA)}](https://github.com/${stableOwner}/${stableRepo}/compare/${latestStableRelease.tagName}...${COMMIT_SHA})`);
-        }
-        const releaseMessage = releaseLines.join("\n");
-        core.info(releaseMessage);
-        core.setOutput("releaseNote", releaseMessage);
     });
+    const compared = response.data;
+    const commits = compared.commits.reverse();
+    const releaseLines = ["# Included commits", ""];
+    const compareBaseUrl = `https://github.com/${stableOwner}/${stableRepo}/compare/`;
+    const lastCommitCompareUrl = compareBaseUrl + LAST_COMMIT_SHA;
+    const shortCommitSha = truncateSha(COMMIT_SHA);
+    for (let commit of commits) {
+        const url = makeCompareString(lastCommitCompareUrl, shortCommitSha);
+        const text = `${truncateSha(commit.sha)}: ${sanitizeCommitMessage(commit)}`;
+        const mdLink = createMarkdownLink(url, text);
+        releaseLines.push(`* ${mdLink}`);
+    }
+    if (latestStableRelease !== null) {
+        const tagCompareUrl = compareBaseUrl + latestStableRelease.tagName;
+        releaseLines.push("");
+        const text = makeCompareString(truncateSha(latestStableRelease.tagName), shortCommitSha);
+        const url = makeCompareString(tagCompareUrl, COMMIT_SHA);
+        const mdLink = createMarkdownLink(url, text);
+        releaseLines.push("Difference to latest stable release: " + mdLink);
+    }
+    const releaseMessage = releaseLines.join("\n");
+    core.info(releaseMessage);
+    core.setOutput("releaseNote", releaseMessage);
+}
+const ignoreCommitMsgLines = [/^Translation: LinkSheet\/.+$/, /^Translate-URL: https:\/\/.*$/];
+function shouldIgnore(line) {
+    if (line.length === 0) {
+        return true;
+    }
+    for (const ignore of ignoreCommitMsgLines) {
+        if (ignore.exec(line)) {
+            return true;
+        }
+    }
+    return false;
+}
+function sanitizeCommitMessage(commit) {
+    return commit.commit.message.split("\n").filter(line => !shouldIgnore(line)).join(" ⤶ ");
+}
+function createMarkdownLink(url, text) {
+    return `[${text}](${url})`;
+}
+function makeCompareString(compare, to) {
+    return compare + "..." + to;
 }
 run();
 
