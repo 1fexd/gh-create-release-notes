@@ -2,6 +2,18 @@ name: "Nightly release notes"
 author: "1fexd"
 description: "Build release notes for nightly builds"
 
+inputs:
+  github-token:
+    description: "Github token with repository permission"
+  stable-repo:
+    description: "Stable repository formatted as 'user/repo'"
+  nightly-repo:
+    description: "Stable repository formatted as 'user/repo'"
+  last-commit-sha:
+    description: "Hash of the previous commit"
+  commit-sha:
+    description: "Hash of this commit"
+
 runs:
   using: "node20"
   main: "dist/index.js"

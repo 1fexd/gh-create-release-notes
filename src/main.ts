@@ -11,118 +11,161 @@ const COMMIT_SHA = core.getInput("commit-sha") || process.env["COMMIT_SHA"];
 const HOME = os.homedir();
 
 type LatestReleaseCommitSha = {
-  repository: {
-    latestRelease: Release
-  }
+	repository: {
+		latestRelease: Release
+	}
 }
 
 type Release = {
-  tagCommit: { oid: string } | null,
-  tagName: string | null
+	tagCommit: { oid: string } | null,
+	tagName: string | null
 }
 
 type Commit = {
-  sha: string,
-  commit: {
-    message: string,
-    committer: {
-      date: string
-    },
-    url: string
-  }
+	sha: string,
+	commit: {
+		message: string,
+		committer: {
+			date: string
+		},
+		url: string
+	}
 }
 
 type CommitCompare = {
-  commits: Commit[]
+	commits: Commit[]
 }
 
 async function queryLatestRelease(octokit: Octokit, owner: string, repo: string): Promise<Release | null> {
-  return (await octokit.graphql<LatestReleaseCommitSha>(
-      `query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
-          repository(owner: $owner, name: $repo) {
-              latestRelease {
-                  tagCommit {
-                      oid
-                  }
+    return (await octokit.graphql<LatestReleaseCommitSha>(
+			`query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
+            repository(owner: $owner, name: $repo) {
+                latestRelease {
+                    tagCommit {
+                        oid
+                    }
 
-                  tagName
-              }
-          }
-      }`, { owner: owner, repo: repo }
-  )).repository.latestRelease;
+                    tagName
+                }
+            }
+        }`, { owner: owner, repo: repo }
+    )).repository.latestRelease;
 }
 
-function shortCommitSha(sha: string) {
-  return sha.substring(0, 7);
+function truncateSha(sha: string) {
+	return sha.substring(0, 7);
 }
 
 async function run(): Promise<void> {
-  if (!STABLE_REPO) {
-    core.error(`Input "STABLE_REPO" not provided`);
-    return;
-  }
+	if (!STABLE_REPO) {
+		core.error(`Input "STABLE_REPO" not provided`);
+		return;
+	}
 
-  if (!NIGHTLY_REPO) {
-    core.error(`Input "NIGHTLY_REPO" not provided`);
-    return;
-  }
+	if (!NIGHTLY_REPO) {
+		core.error(`Input "NIGHTLY_REPO" not provided`);
+		return;
+	}
 
-  if (!COMMIT_SHA) {
-    core.error(`Input "COMMIT_SHA" not provided`);
-    return;
-  }
+	if (!COMMIT_SHA) {
+		core.error(`Input "COMMIT_SHA" not provided`);
+		return;
+	}
 
-  if (!LAST_COMMIT_SHA) {
-    core.error(`Input "LAST_COMMIT_SHA" not provided`);
-    return;
-  }
+	if (!LAST_COMMIT_SHA) {
+		core.error(`Input "LAST_COMMIT_SHA" not provided`);
+		return;
+	}
 
-  const octokit = new Octokit({ auth: GITHUB_TOKEN });
+	const octokit = new Octokit({ auth: GITHUB_TOKEN });
 
-  const stableSplit = STABLE_REPO.split("/");
-  const stableOwner = stableSplit[0];
-  const stableRepo = stableSplit[1];
-  core.info(`${stableOwner}/${stableRepo}`);
+	const stableSplit = STABLE_REPO.split("/");
+	const stableOwner = stableSplit[0];
+	const stableRepo = stableSplit[1];
+	core.info(`${stableOwner}/${stableRepo}`);
 
-  const latestStableRelease = await queryLatestRelease(octokit, stableOwner, stableRepo);
-  if (latestStableRelease === null) {
-    core.warning("No latest release in stable repo found!");
-  }
+	const latestStableRelease = await queryLatestRelease(octokit, stableOwner, stableRepo);
+	if (latestStableRelease === null) {
+		core.warning("No latest release in stable repo found!");
+	}
 
-  const nightlySplit = NIGHTLY_REPO.split("/");
-  const nightlyOwner = nightlySplit[0];
-  const nightlyRepo = nightlySplit[1];
+	const nightlySplit = NIGHTLY_REPO.split("/");
+	const nightlyOwner = nightlySplit[0];
+	const nightlyRepo = nightlySplit[1];
 
-  core.info(`${nightlyOwner}/${nightlyRepo}`);
+	core.info(`${nightlyOwner}/${nightlyRepo}`);
 
-  const response = await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
-    owner: stableOwner,
-    repo: stableRepo,
-    basehead: `${LAST_COMMIT_SHA}...${COMMIT_SHA}`,
-    headers: {
-      "X-GitHub-Api-Version": "2022-11-28"
-    }
-  });
+	const response = await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+		owner: stableOwner,
+		repo: stableRepo,
+		basehead: `${LAST_COMMIT_SHA}...${COMMIT_SHA}`,
+		headers: {
+			"X-GitHub-Api-Version": "2022-11-28"
+		}
+	});
 
-  const compared = response.data as CommitCompare;
-  const commits = compared.commits.reverse();
+	const compared = response.data as CommitCompare;
+	const commits = compared.commits.reverse();
 
-  const releaseLines = ["# Included commits", ""];
+	const releaseLines = ["# Included commits", ""];
+	const compareBaseUrl = `https://github.com/${stableOwner}/${stableRepo}/compare/`;
+	const lastCommitCompareUrl = compareBaseUrl + LAST_COMMIT_SHA;
 
-  for (let commit of commits) {
-    releaseLines.push(`* [${shortCommitSha(commit.sha)}: ${commit.commit.message.replace("\n", ", ").replace("\r", "")}](https://github.com/${stableOwner}/${stableRepo}/compare/${LAST_COMMIT_SHA}...${shortCommitSha(COMMIT_SHA)})`);
-  }
+	const shortCommitSha = truncateSha(COMMIT_SHA);
 
-  if (latestStableRelease !== null) {
-    releaseLines.push("");
-    releaseLines.push(`Difference to latest stable release: [${shortCommitSha(latestStableRelease.tagName!)}...${shortCommitSha(COMMIT_SHA)}](https://github.com/${stableOwner}/${stableRepo}/compare/${latestStableRelease.tagName}...${COMMIT_SHA})`);
+	for (let commit of commits) {
+		const url = makeCompareString(lastCommitCompareUrl, shortCommitSha);
+		const text = `${truncateSha(commit.sha)}: ${sanitizeCommitMessage(commit)}`;
+		const mdLink = createMarkdownLink(url, text);
 
-  }
+		releaseLines.push(`* ${mdLink}`);
+	}
 
-  const releaseMessage = releaseLines.join("\n");
+	if (latestStableRelease !== null) {
+		const tagCompareUrl = compareBaseUrl + latestStableRelease.tagName;
+		releaseLines.push("");
 
-  core.info(releaseMessage);
-  core.setOutput("releaseNote", releaseMessage);
+		const text = makeCompareString(truncateSha(latestStableRelease.tagName!), shortCommitSha);
+		const url = makeCompareString(tagCompareUrl, COMMIT_SHA);
+
+		const mdLink = createMarkdownLink(url, text);
+
+		releaseLines.push("Difference to latest stable release: " + mdLink);
+	}
+
+	const releaseMessage = releaseLines.join("\n");
+
+	core.info(releaseMessage);
+	core.setOutput("releaseNote", releaseMessage);
 }
+
+const ignoreCommitMsgLines: RegExp[] = [/^Translation: LinkSheet\/.+$/, /^Translate-URL: https:\/\/.*$/];
+
+function shouldIgnore(line: string) {
+	if (line.length === 0) {
+		return true;
+	}
+
+	for (const ignore of ignoreCommitMsgLines) {
+		if (ignore.exec(line)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+function sanitizeCommitMessage(commit: Commit) {
+	return commit.commit.message.split("\n").filter(line => !shouldIgnore(line)).join(" ⤶ ");
+}
+
+function createMarkdownLink(url: string, text: string) {
+	return `[${text}](${url})`;
+}
+
+function makeCompareString(compare: string, to: string) {
+	return compare + "..." + to;
+}
+
 
 run();
