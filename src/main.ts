@@ -115,7 +115,7 @@ async function run(): Promise<void> {
 
 	for (let commit of commits) {
 		const url = makeCompareString(lastCommitCompareUrl, shortCommitSha);
-		const text = `${truncateSha(commit.sha)}: ${sanitizeCommitMessage(commit)}`;
+		const text = `${wrapInlineCodeBlock(truncateSha(commit.sha))}: ${sanitizeCommitMessage(commit)}`;
 		const mdLink = createMarkdownLink(url, text);
 
 		releaseLines.push(`* ${mdLink}`);
@@ -125,9 +125,12 @@ async function run(): Promise<void> {
 		const tagCompareUrl = compareBaseUrl + latestStableRelease.tagName;
 		releaseLines.push("");
 
-		const text = makeCompareString(truncateSha(latestStableRelease.tagName!), shortCommitSha);
-		const url = makeCompareString(tagCompareUrl, COMMIT_SHA);
+		const text = makeCompareString(
+			wrapInlineCodeBlock(truncateSha(latestStableRelease.tagName!)),
+			wrapInlineCodeBlock(shortCommitSha)
+		);
 
+		const url = makeCompareString(tagCompareUrl, COMMIT_SHA);
 		const mdLink = createMarkdownLink(url, text);
 
 		releaseLines.push("Difference to latest stable release: " + mdLink);
@@ -157,6 +160,10 @@ function shouldIgnore(line: string) {
 
 function sanitizeCommitMessage(commit: Commit) {
 	return commit.commit.message.split("\n").filter(line => !shouldIgnore(line)).join(" ⤶ ");
+}
+
+function wrapInlineCodeBlock(str: string) {
+	return "`" + str + "`";
 }
 
 function createMarkdownLink(url: string, text: string) {
