@@ -89,6 +89,12 @@ async function run(): Promise<void> {
 		core.warning("No latest release in stable repo found!");
 	}
 
+	if (LAST_COMMIT_SHA === "0000000000000000000000000000000000000000") {
+		core.warning("No last commit found, setting init release note");
+		core.setOutput("releaseNote", "* Initial release");
+		return;
+	}
+
 	const nightlySplit = NIGHTLY_REPO.split("/");
 	const nightlyOwner = nightlySplit[0];
 	const nightlyRepo = nightlySplit[1];
