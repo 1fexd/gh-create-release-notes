@@ -72,39 +72,36 @@ async function run(): Promise<void> {
 		return;
 	}
 
-	if (!LAST_COMMIT_SHA) {
-		core.error(`Input "LAST_COMMIT_SHA" not provided`);
-		return;
-	}
+	// if (!LAST_COMMIT_SHA) {
+	// 	core.error(`Input "LAST_COMMIT_SHA" not provided`);
+	// 	return;
+	// }
 
 	const octokit = new Octokit({ auth: GITHUB_TOKEN });
-
-	const stableSplit = STABLE_REPO.split("/");
-	const stableOwner = stableSplit[0];
-	const stableRepo = stableSplit[1];
-	core.info(`${stableOwner}/${stableRepo}`);
-
-	const latestStableRelease = await queryLatestRelease(octokit, stableOwner, stableRepo);
-	if (latestStableRelease === null) {
-		core.warning("No latest release in stable repo found!");
-	}
-
-	if (LAST_COMMIT_SHA === "0000000000000000000000000000000000000000") {
-		core.warning("No last commit found, setting init release note");
-		core.setOutput("releaseNote", "* Initial release");
-		return;
-	}
 
 	const nightlySplit = NIGHTLY_REPO.split("/");
 	const nightlyOwner = nightlySplit[0];
 	const nightlyRepo = nightlySplit[1];
 
-	core.info(`${nightlyOwner}/${nightlyRepo}`);
+	const stableSplit = STABLE_REPO.split("/");
+	const stableOwner = stableSplit[0];
+	const stableRepo = stableSplit[1];
+	core.info(`Stable repo: ${stableOwner}/${stableRepo}`);
+	core.info(`Nightly repo: ${nightlyOwner}/${nightlyRepo}`);
+
+	const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
+	const lastCommitSha = latestNightlyRelease?.tagCommit?.oid;
+
+	if (!lastCommitSha || lastCommitSha === "0000000000000000000000000000000000000000") {
+		core.warning("No last commit found, setting init release note");
+		core.setOutput("releaseNote", "* Initial release");
+		return;
+	}
 
 	const response = await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
 		owner: stableOwner,
 		repo: stableRepo,
-		basehead: `${LAST_COMMIT_SHA}...${COMMIT_SHA}`,
+		basehead: `${lastCommitSha}...${COMMIT_SHA}`,
 		headers: {
 			"X-GitHub-Api-Version": "2022-11-28"
 		}
@@ -115,7 +112,7 @@ async function run(): Promise<void> {
 
 	const releaseLines = ["# Included commits", ""];
 	const compareBaseUrl = `https://github.com/${stableOwner}/${stableRepo}/compare/`;
-	const lastCommitCompareUrl = compareBaseUrl + LAST_COMMIT_SHA;
+	const lastCommitCompareUrl = compareBaseUrl + lastCommitSha;
 
 	const shortCommitSha = truncateSha(COMMIT_SHA);
 
@@ -127,12 +124,12 @@ async function run(): Promise<void> {
 		releaseLines.push(`* ${mdLink}`);
 	}
 
-	if (latestStableRelease !== null) {
-		const tagCompareUrl = compareBaseUrl + latestStableRelease.tagName;
+	if (latestNightlyRelease !== null) {
+		const tagCompareUrl = compareBaseUrl + latestNightlyRelease.tagName;
 		releaseLines.push("");
 
 		const text = makeCompareString(
-			wrapInlineCodeBlock(truncateSha(latestStableRelease.tagName!)),
+			wrapInlineCodeBlock(truncateSha(latestNightlyRelease.tagName!)),
 			wrapInlineCodeBlock(shortCommitSha)
 		);
 
