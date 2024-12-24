@@ -27164,7 +27164,7 @@ async function run() {
     core.info(`Stable repo: ${stableOwner}/${stableRepo}`);
     core.info(`Nightly repo: ${nightlyOwner}/${nightlyRepo}`);
     const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
-    const lastCommitSha = latestNightlyRelease?.tagCommit?.oid;
+    const lastCommitSha = latestNightlyRelease?.tagName;
     if (!lastCommitSha || lastCommitSha === "0000000000000000000000000000000000000000") {
         core.warning("No last commit found, setting init release note");
         core.setOutput("releaseNote", "* Initial release");

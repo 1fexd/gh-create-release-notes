@@ -90,7 +90,7 @@ async function run(): Promise<void> {
 	core.info(`Nightly repo: ${nightlyOwner}/${nightlyRepo}`);
 
 	const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
-	const lastCommitSha = latestNightlyRelease?.tagCommit?.oid;
+	const lastCommitSha = latestNightlyRelease?.tagName;
 
 	if (!lastCommitSha || lastCommitSha === "0000000000000000000000000000000000000000") {
 		core.warning("No last commit found, setting init release note");
