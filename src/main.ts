@@ -111,13 +111,16 @@ async function run(): Promise<void> {
 	const commits = compared.commits.reverse();
 
 	const releaseLines = ["# Included commits", ""];
-	const compareBaseUrl = `https://github.com/${stableOwner}/${stableRepo}/compare/`;
+	const stableRepoBaseUrl = `https://github.com/${stableOwner}/${stableRepo}`;
+	const compareBaseUrl = `${stableRepoBaseUrl}/compare/`;
+	const commitBaseUrl = `${stableRepoBaseUrl}/commit/`;
 	const lastCommitCompareUrl = compareBaseUrl + lastCommitSha;
 
 	const shortCommitSha = truncateSha(COMMIT_SHA);
 
 	for (let commit of commits) {
-		const url = makeCompareString(lastCommitCompareUrl, shortCommitSha);
+		// https://github.com/LinkSheet/LinkSheet/commit/c19d0e6d882fc62533efb03894bd1feebbaa2908
+		const url = commitBaseUrl + commit.sha;
 		const text = `${wrapInlineCodeBlock(truncateSha(commit.sha))}: ${sanitizeCommitMessage(commit)}`;
 		const mdLink = createMarkdownLink(url, text);
 
