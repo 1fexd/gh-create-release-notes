@@ -27171,27 +27171,34 @@ async function run() {
     core.info(`Stable repo: ${stableOwner}/${stableRepo}`);
     core.info(`Nightly repo: ${nightlyOwner}/${nightlyRepo}`);
     const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
-    const lastCommitSha = latestNightlyRelease?.tagName;
-    if (!lastCommitSha || lastCommitSha === "0000000000000000000000000000000000000000") {
+    const tagName = latestNightlyRelease?.tagName;
+    if (!tagName || tagName === "0000000000000000000000000000000000000000") {
         core.warning("No last commit found, setting init release note");
         core.setOutput("releaseNote", "* Initial release");
         return;
     }
-    const response = await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
-        owner: stableOwner,
-        repo: stableRepo,
-        basehead: `${lastCommitSha}...${COMMIT_SHA}`,
-        headers: {
-            "X-GitHub-Api-Version": "2022-11-28"
-        }
-    });
+    let response;
+    try {
+        response = await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+            owner: stableOwner,
+            repo: stableRepo,
+            basehead: `${tagName}...${COMMIT_SHA}`,
+            headers: {
+                "X-GitHub-Api-Version": "2022-11-28"
+            }
+        });
+    }
+    catch (e) {
+        console.error(e);
+        return;
+    }
     const compared = response.data;
     const commits = compared.commits.reverse();
     const releaseLines = ["# Included commits", ""];
     const stableRepoBaseUrl = `https://github.com/${stableOwner}/${stableRepo}`;
     const compareBaseUrl = `${stableRepoBaseUrl}/compare/`;
     const commitBaseUrl = `${stableRepoBaseUrl}/commit/`;
-    const lastCommitCompareUrl = compareBaseUrl + lastCommitSha;
+    const lastCommitCompareUrl = compareBaseUrl + tagName;
     const shortCommitSha = truncateSha(COMMIT_SHA);
     for (let commit of commits) {
         // https://github.com/LinkSheet/LinkSheet/commit/c19d0e6d882fc62533efb03894bd1feebbaa2908
