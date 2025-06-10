@@ -27090,6 +27090,98 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ 8598:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createChangelog = exports.getCommits = exports.queryLatestRelease = void 0;
+async function queryLatestRelease(octokit, owner, repo) {
+    return (await octokit.graphql(`query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
+            repository(owner: $owner, name: $repo) {
+                latestRelease {
+                    tagCommit {
+                        oid
+                    }
+
+                    tagName
+                }
+            }
+        }`, { owner: owner, repo: repo })).repository.latestRelease;
+}
+exports.queryLatestRelease = queryLatestRelease;
+async function getCommits(octokit, owner, repo, lastCommitSha, commitSha) {
+    try {
+        const response = await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+            owner: owner,
+            repo: repo,
+            basehead: `${lastCommitSha}...${commitSha}`,
+            headers: {
+                "X-GitHub-Api-Version": "2022-11-28"
+            }
+        });
+        return { response: response };
+    }
+    catch (e) {
+        return { error: e };
+    }
+}
+exports.getCommits = getCommits;
+function createChangelog(owner, repo, tag, latestNightlyRelease, commits) {
+    const releaseLines = ["# Included commits", ""];
+    const stableRepoBaseUrl = `https://github.com/${owner}/${repo}`;
+    const compareBaseUrl = `${stableRepoBaseUrl}/compare/`;
+    const commitBaseUrl = `${stableRepoBaseUrl}/commit/`;
+    for (let commit of commits) {
+        // https://github.com/LinkSheet/LinkSheet/commit/c19d0e6d882fc62533efb03894bd1feebbaa2908
+        const url = commitBaseUrl + commit.sha;
+        const text = `${wrapInlineCodeBlock(truncateSha(commit.sha))}: ${sanitizeCommitMessage(commit)}`;
+        const mdLink = createMarkdownLink(url, text);
+        releaseLines.push(`* ${mdLink}`);
+    }
+    if (latestNightlyRelease !== null) {
+        releaseLines.push("");
+        const text = makeCompareString(wrapInlineCodeBlock(latestNightlyRelease.tagName), wrapInlineCodeBlock(tag));
+        const url = makeCompareString(compareBaseUrl + latestNightlyRelease.tagName, tag);
+        const mdLink = createMarkdownLink(url, text);
+        releaseLines.push("Difference to latest stable release: " + mdLink);
+    }
+    const releaseMessage = releaseLines.join("\n");
+    return releaseMessage;
+}
+exports.createChangelog = createChangelog;
+const ignoreCommitMsgLines = [/^Translation: LinkSheet\/.+$/, /^Translate-URL: https:\/\/.*$/];
+function shouldIgnore(line) {
+    if (line.length === 0) {
+        return true;
+    }
+    for (const ignore of ignoreCommitMsgLines) {
+        if (ignore.exec(line)) {
+            return true;
+        }
+    }
+    return false;
+}
+function sanitizeCommitMessage(commit) {
+    return commit.commit.message.split("\n").filter(line => !shouldIgnore(line)).join(" ⤶ ");
+}
+function wrapInlineCodeBlock(str) {
+    return "`" + str + "`";
+}
+function createMarkdownLink(url, text) {
+    return `[${text}](${url})`;
+}
+function makeCompareString(compare, to) {
+    return compare + "..." + to;
+}
+function truncateSha(sha) {
+    return sha.substring(0, 7);
+}
+
+
+/***/ }),
+
 /***/ 399:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -27122,28 +27214,14 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
 const os = __importStar(__nccwpck_require__(2037));
 const core_1 = __nccwpck_require__(6762);
+const changelog_1 = __nccwpck_require__(8598);
 const GITHUB_TOKEN = core.getInput("github-token") || process.env["GITHUB_TOKEN"];
 const STABLE_REPO = core.getInput("stable-repo") || process.env["STABLE_REPO"];
 const NIGHTLY_REPO = core.getInput("nightly-repo") || process.env["NIGHTLY_REPO"];
 const LAST_COMMIT_SHA = core.getInput("last-commit-sha") || process.env["LAST_COMMIT_SHA"];
 const COMMIT_SHA = core.getInput("commit-sha") || process.env["COMMIT_SHA"];
+const NIGHTLY_TAG = core.getInput("nightly-tag") || process.env["NIGHTLY_TAG"];
 const HOME = os.homedir();
-async function queryLatestRelease(octokit, owner, repo) {
-    return (await octokit.graphql(`query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
-            repository(owner: $owner, name: $repo) {
-                latestRelease {
-                    tagCommit {
-                        oid
-                    }
-
-                    tagName
-                }
-            }
-        }`, { owner: owner, repo: repo })).repository.latestRelease;
-}
-function truncateSha(sha) {
-    return sha.substring(0, 7);
-}
 async function run() {
     if (!STABLE_REPO) {
         core.error(`Input "STABLE_REPO" not provided`);
@@ -27157,10 +27235,10 @@ async function run() {
         core.error(`Input "COMMIT_SHA" not provided`);
         return;
     }
-    // if (!LAST_COMMIT_SHA) {
-    // 	core.error(`Input "LAST_COMMIT_SHA" not provided`);
-    // 	return;
-    // }
+    if (!NIGHTLY_TAG) {
+        core.error(`Input "NIGHTLY_TAG" not provided`);
+        return;
+    }
     const octokit = new core_1.Octokit({ auth: GITHUB_TOKEN });
     const nightlySplit = NIGHTLY_REPO.split("/");
     const nightlyOwner = nightlySplit[0];
@@ -27170,78 +27248,25 @@ async function run() {
     const stableRepo = stableSplit[1];
     core.info(`Stable repo: ${stableOwner}/${stableRepo}`);
     core.info(`Nightly repo: ${nightlyOwner}/${nightlyRepo}`);
-    const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
+    const latestNightlyRelease = await (0, changelog_1.queryLatestRelease)(octokit, nightlyOwner, nightlyRepo);
     const tagName = latestNightlyRelease?.tagName;
     if (!tagName || tagName === "0000000000000000000000000000000000000000") {
         core.warning("No last commit found, setting init release note");
         core.setOutput("releaseNote", "* Initial release");
         return;
     }
-    let response;
-    try {
-        response = await octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
-            owner: stableOwner,
-            repo: stableRepo,
-            basehead: `${tagName}...${COMMIT_SHA}`,
-            headers: {
-                "X-GitHub-Api-Version": "2022-11-28"
-            }
-        });
-    }
-    catch (e) {
-        console.error(e);
-        return;
-    }
-    const compared = response.data;
-    const commits = compared.commits.reverse();
-    const releaseLines = ["# Included commits", ""];
-    const stableRepoBaseUrl = `https://github.com/${stableOwner}/${stableRepo}`;
-    const compareBaseUrl = `${stableRepoBaseUrl}/compare/`;
-    const commitBaseUrl = `${stableRepoBaseUrl}/commit/`;
-    const lastCommitCompareUrl = compareBaseUrl + tagName;
-    const shortCommitSha = truncateSha(COMMIT_SHA);
-    for (let commit of commits) {
-        // https://github.com/LinkSheet/LinkSheet/commit/c19d0e6d882fc62533efb03894bd1feebbaa2908
-        const url = commitBaseUrl + commit.sha;
-        const text = `${wrapInlineCodeBlock(truncateSha(commit.sha))}: ${sanitizeCommitMessage(commit)}`;
-        const mdLink = createMarkdownLink(url, text);
-        releaseLines.push(`* ${mdLink}`);
-    }
-    if (latestNightlyRelease !== null) {
-        const tagCompareUrl = compareBaseUrl + latestNightlyRelease.tagName;
-        releaseLines.push("");
-        const text = makeCompareString(wrapInlineCodeBlock(truncateSha(latestNightlyRelease.tagName)), wrapInlineCodeBlock(shortCommitSha));
-        const url = makeCompareString(tagCompareUrl, COMMIT_SHA);
-        const mdLink = createMarkdownLink(url, text);
-        releaseLines.push("Difference to latest stable release: " + mdLink);
-    }
-    const releaseMessage = releaseLines.join("\n");
-    core.info(releaseMessage);
-    core.setOutput("releaseNote", releaseMessage);
-}
-const ignoreCommitMsgLines = [/^Translation: LinkSheet\/.+$/, /^Translate-URL: https:\/\/.*$/];
-function shouldIgnore(line) {
-    if (line.length === 0) {
-        return true;
-    }
-    for (const ignore of ignoreCommitMsgLines) {
-        if (ignore.exec(line)) {
-            return true;
+    if (LAST_COMMIT_SHA) {
+        const response = await (0, changelog_1.getCommits)(octokit, stableOwner, stableRepo, LAST_COMMIT_SHA, COMMIT_SHA);
+        if (!response.response) {
+            core.error(`Failed to fetch commits between ${LAST_COMMIT_SHA} and ${COMMIT_SHA}: ${response.error}!`);
+            return;
         }
+        const compared = response.response.data;
+        const commits = compared.commits.reverse();
+        const releaseMessage = (0, changelog_1.createChangelog)(stableOwner, stableRepo, COMMIT_SHA, latestNightlyRelease, commits);
+        core.info(releaseMessage);
+        core.setOutput("releaseNote", releaseMessage);
     }
-    return false;
-}
-function sanitizeCommitMessage(commit) {
-    return commit.commit.message.split("\n").filter(line => !shouldIgnore(line)).join(" ⤶ ");
-}
-function wrapInlineCodeBlock(str) {
-    return "`" + str + "`";
-}
-function createMarkdownLink(url, text) {
-    return `[${text}](${url})`;
-}
-function makeCompareString(compare, to) {
-    return compare + "..." + to;
 }
 run();
 
