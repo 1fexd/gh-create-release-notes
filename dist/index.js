@@ -27090,13 +27090,66 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
-/***/ 8598:
+/***/ 7096:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.filterCommits = exports.checkCommit = exports.rewriteCommit = void 0;
+const ignoreConfigs = [
+    {
+        accountId: 1607653,
+        regex: /^Merge remote-tracking branch 'origin\/\w+'$/
+    },
+    {
+        regex: /.*Merge pull request #\d+ from weblate\/weblate-\w+-\w+\n\nTranslations update from Hosted Weblate$/
+    },
+    {
+        regex: /^chore: Dependencies$/,
+    },
+];
+const rewriteConfigs = [
+    {
+        regex: /^Translated using Weblate \((\w+)\)\n\nCurrently translated at (\d+\.\d)% \((\d+) of (\d+) strings\)\n\nTranslation: \w+\/\w+\nTranslate-URL: .+$/,
+        replaceWith: "Translated: $1 ($2%, $3 of $4 strings)"
+    }
+];
+function check(config, commit) {
+    const accountFlag = !config.accountId || commit.author?.id === config.accountId;
+    const messageFlag = config.regex.test(commit.commit.message);
+    return accountFlag && messageFlag;
+}
+function rewriteCommit(commit) {
+    const message = commit.commit.message;
+    for (const config of rewriteConfigs) {
+        if (config.regex.test(message)) {
+            return message.replace(config.regex, config.replaceWith);
+        }
+    }
+    return null;
+}
+exports.rewriteCommit = rewriteCommit;
+function checkCommit(commit) {
+    return ignoreConfigs.some(c => check(c, commit));
+}
+exports.checkCommit = checkCommit;
+function filterCommits(commits) {
+    return commits.filter(c => !checkCommit(c));
+}
+exports.filterCommits = filterCommits;
+
+
+/***/ }),
+
+/***/ 8598:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createChangelog = exports.getCommits = exports.queryLatestRelease = void 0;
+const MessageHelper_1 = __nccwpck_require__(7096);
 async function queryLatestRelease(octokit, owner, repo) {
     return (await octokit.graphql(`query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
             repository(owner: $owner, name: $repo) {
@@ -27151,20 +27204,9 @@ function createChangelog(owner, repo, tag, latestNightlyRelease, commits) {
     return releaseMessage;
 }
 exports.createChangelog = createChangelog;
-const ignoreCommitMsgLines = [/^Translation: LinkSheet\/.+$/, /^Translate-URL: https:\/\/.*$/];
-function shouldIgnore(line) {
-    if (line.length === 0) {
-        return true;
-    }
-    for (const ignore of ignoreCommitMsgLines) {
-        if (ignore.exec(line)) {
-            return true;
-        }
-    }
-    return false;
-}
 function sanitizeCommitMessage(commit) {
-    return commit.commit.message.split("\n").filter(line => !shouldIgnore(line)).join(" ⤶ ");
+    const message = (0, MessageHelper_1.rewriteCommit)(commit) ?? commit.commit.message;
+    return message.split("\n").join(" ⤶ ");
 }
 function wrapInlineCodeBlock(str) {
     return "`" + str + "`";
@@ -27215,6 +27257,7 @@ const core = __importStar(__nccwpck_require__(2186));
 const os = __importStar(__nccwpck_require__(2037));
 const core_1 = __nccwpck_require__(6762);
 const changelog_1 = __nccwpck_require__(8598);
+const MessageHelper_1 = __nccwpck_require__(7096);
 const GITHUB_TOKEN = core.getInput("github-token") || process.env["GITHUB_TOKEN"];
 const STABLE_REPO = core.getInput("stable-repo") || process.env["STABLE_REPO"];
 const NIGHTLY_REPO = core.getInput("nightly-repo") || process.env["NIGHTLY_REPO"];
@@ -27249,20 +27292,21 @@ async function run() {
     core.info(`Stable repo: ${stableOwner}/${stableRepo}`);
     core.info(`Nightly repo: ${nightlyOwner}/${nightlyRepo}`);
     const latestNightlyRelease = await (0, changelog_1.queryLatestRelease)(octokit, nightlyOwner, nightlyRepo);
+    const tagCommit = latestNightlyRelease?.tagCommit?.oid;
     const tagName = latestNightlyRelease?.tagName;
-    if (!tagName || tagName === "0000000000000000000000000000000000000000") {
+    if (!latestNightlyRelease || !tagCommit || tagCommit === "0000000000000000000000000000000000000000") {
         core.warning("No last commit found, setting init release note");
         core.setOutput("releaseNote", "* Initial release");
         return;
     }
-    if (LAST_COMMIT_SHA) {
-        const response = await (0, changelog_1.getCommits)(octokit, stableOwner, stableRepo, LAST_COMMIT_SHA, COMMIT_SHA);
+    if (tagCommit) {
+        const response = await (0, changelog_1.getCommits)(octokit, stableOwner, stableRepo, tagCommit, COMMIT_SHA);
         if (!response.response) {
-            core.error(`Failed to fetch commits between ${LAST_COMMIT_SHA} and ${COMMIT_SHA}: ${response.error}!`);
+            core.error(`Failed to fetch commits between ${tagCommit} and ${COMMIT_SHA}: ${response.error}!`);
             return;
         }
         const compared = response.response.data;
-        const commits = compared.commits.reverse();
+        const commits = (0, MessageHelper_1.filterCommits)(compared.commits.reverse());
         const releaseMessage = (0, changelog_1.createChangelog)(stableOwner, stableRepo, COMMIT_SHA, latestNightlyRelease, commits);
         core.info(releaseMessage);
         core.setOutput("releaseNote", releaseMessage);
