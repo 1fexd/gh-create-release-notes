@@ -1,7 +1,7 @@
-import { expect, test } from "bun:test";
 import { createChangelog, getCommits, queryLatestRelease } from "./src/changelog";
 import { Octokit } from "@octokit/core";
-import { CommitCompare } from "./src/types";
+import { CommitCompare, Release } from "./src/types";
+import { filterCommits } from "./src/MessageHelper";
 
 test("test", async () => {
     const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
@@ -19,9 +19,13 @@ test("test", async () => {
 
     const nightlyOwner = owner;
     const nightlyRepo = "nightly";
-    const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
+    // const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
+    const latestNightlyRelease : Release =  {
+        tagCommit: null,
+        tagName: "nightly-2025060402"
+    };
     const compared = response.response!.data as CommitCompare;
-    const commits = compared.commits.reverse();
+    const commits = filterCommits(compared.commits.reverse());
     const changelog = createChangelog(owner, repo, "nightly-2025061001", latestNightlyRelease, commits);
     console.log(changelog);
 });

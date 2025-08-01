@@ -1,5 +1,6 @@
 import { Octokit } from "@octokit/core";
 import { Commit, LatestReleaseCommitSha, Release } from "./types";
+import { rewriteCommit } from "./MessageHelper";
 
 export async function queryLatestRelease(octokit: Octokit, owner: string, repo: string): Promise<Release | null> {
     return (await octokit.graphql<LatestReleaseCommitSha>(
@@ -67,24 +68,9 @@ export function createChangelog(owner: string, repo: string, tag: string, latest
     return releaseMessage;
 }
 
-const ignoreCommitMsgLines: RegExp[] = [/^Translation: LinkSheet\/.+$/, /^Translate-URL: https:\/\/.*$/];
-
-function shouldIgnore(line: string) {
-    if (line.length === 0) {
-        return true;
-    }
-
-    for (const ignore of ignoreCommitMsgLines) {
-        if (ignore.exec(line)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 function sanitizeCommitMessage(commit: Commit) {
-    return commit.commit.message.split("\n").filter(line => !shouldIgnore(line)).join(" ⤶ ");
+    const message = rewriteCommit(commit) ?? commit.commit.message;
+    return message.split("\n").join(" ⤶ ");
 }
 
 function wrapInlineCodeBlock(str: string) {

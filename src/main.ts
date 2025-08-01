@@ -3,6 +3,7 @@ import * as os from "os";
 import { Octokit } from "@octokit/core";
 import { createChangelog, getCommits, queryLatestRelease } from "./changelog";
 import { CommitCompare } from "./types";
+import { filterCommits } from "./MessageHelper";
 
 const GITHUB_TOKEN = core.getInput("github-token") || process.env["GITHUB_TOKEN"];
 const STABLE_REPO = core.getInput("stable-repo") || process.env["STABLE_REPO"];
@@ -47,23 +48,24 @@ async function run(): Promise<void> {
     core.info(`Nightly repo: ${nightlyOwner}/${nightlyRepo}`);
 
     const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
+    const tagCommit = latestNightlyRelease?.tagCommit?.oid;
     const tagName = latestNightlyRelease?.tagName;
 
-    if (!tagName || tagName === "0000000000000000000000000000000000000000") {
+    if (!latestNightlyRelease || !tagCommit || tagCommit === "0000000000000000000000000000000000000000") {
         core.warning("No last commit found, setting init release note");
         core.setOutput("releaseNote", "* Initial release");
         return;
     }
 
-    if (LAST_COMMIT_SHA) {
-        const response = await getCommits(octokit, stableOwner, stableRepo, LAST_COMMIT_SHA, COMMIT_SHA);
+    if (tagCommit) {
+        const response = await getCommits(octokit, stableOwner, stableRepo, tagCommit, COMMIT_SHA);
         if (!response.response) {
-            core.error(`Failed to fetch commits between ${LAST_COMMIT_SHA} and ${COMMIT_SHA}: ${response.error}!`);
+            core.error(`Failed to fetch commits between ${tagCommit} and ${COMMIT_SHA}: ${response.error}!`);
             return;
         }
 
         const compared = response.response.data as CommitCompare;
-        const commits = compared.commits.reverse();
+        const commits = filterCommits(compared.commits.reverse());
         const releaseMessage = createChangelog(stableOwner, stableRepo, COMMIT_SHA, latestNightlyRelease, commits);
         core.info(releaseMessage);
         core.setOutput("releaseNote", releaseMessage);
