@@ -27151,7 +27151,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createChangelog = exports.getCommits = exports.queryLatestRelease = void 0;
 const MessageHelper_1 = __nccwpck_require__(7096);
 async function queryLatestRelease(octokit, owner, repo) {
-    return (await octokit.graphql(`query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
+    const response = await octokit.graphql(`query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
             repository(owner: $owner, name: $repo) {
                 latestRelease {
                     tagCommit {
@@ -27161,7 +27161,8 @@ async function queryLatestRelease(octokit, owner, repo) {
                     tagName
                 }
             }
-        }`, { owner: owner, repo: repo })).repository.latestRelease;
+        }`, { owner: owner, repo: repo });
+    return response.repository.latestRelease;
 }
 exports.queryLatestRelease = queryLatestRelease;
 async function getCommits(octokit, owner, repo, lastCommitSha, commitSha) {
@@ -27293,16 +27294,16 @@ async function run() {
     core.info(`Nightly repo: ${nightlyOwner}/${nightlyRepo}`);
     const latestNightlyRelease = await (0, changelog_1.queryLatestRelease)(octokit, nightlyOwner, nightlyRepo);
     const tagCommit = latestNightlyRelease?.tagCommit?.oid;
-    const tagName = latestNightlyRelease?.tagName;
+    const latestTagName = latestNightlyRelease?.tagName;
     if (!latestNightlyRelease || !tagCommit || tagCommit === "0000000000000000000000000000000000000000") {
         core.warning("No last commit found, setting init release note");
         core.setOutput("releaseNote", "* Initial release");
         return;
     }
-    if (tagCommit) {
-        const response = await (0, changelog_1.getCommits)(octokit, stableOwner, stableRepo, tagCommit, COMMIT_SHA);
+    if (tagCommit && latestTagName) {
+        const response = await (0, changelog_1.getCommits)(octokit, stableOwner, stableRepo, latestTagName, NIGHTLY_TAG);
         if (!response.response) {
-            core.error(`Failed to fetch commits between ${tagCommit} and ${COMMIT_SHA}: ${response.error}!`);
+            core.error(`Failed to fetch commits between ${latestTagName} and ${NIGHTLY_TAG}: ${response.error}!`);
             return;
         }
         const compared = response.response.data;
