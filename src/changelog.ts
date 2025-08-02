@@ -3,7 +3,7 @@ import { Commit, LatestReleaseCommitSha, Release } from "./types";
 import { rewriteCommit } from "./MessageHelper";
 
 export async function queryLatestRelease(octokit: Octokit, owner: string, repo: string): Promise<Release | null> {
-    return (await octokit.graphql<LatestReleaseCommitSha>(
+    const response = await octokit.graphql<LatestReleaseCommitSha>(
         `query GetCommitShaFromLatestRelease($owner: String!, $repo: String!) {
             repository(owner: $owner, name: $repo) {
                 latestRelease {
@@ -14,8 +14,11 @@ export async function queryLatestRelease(octokit: Octokit, owner: string, repo: 
                     tagName
                 }
             }
-        }`, { owner: owner, repo: repo }
-    )).repository.latestRelease;
+        }`,
+        { owner: owner, repo: repo }
+    );
+
+    return response.repository.latestRelease;
 }
 
 export async function getCommits(octokit: Octokit, owner: string, repo: string, lastCommitSha: string, commitSha: string) {

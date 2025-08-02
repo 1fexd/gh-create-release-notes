@@ -49,7 +49,7 @@ async function run(): Promise<void> {
 
     const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
     const tagCommit = latestNightlyRelease?.tagCommit?.oid;
-    const tagName = latestNightlyRelease?.tagName;
+    const latestTagName = latestNightlyRelease?.tagName;
 
     if (!latestNightlyRelease || !tagCommit || tagCommit === "0000000000000000000000000000000000000000") {
         core.warning("No last commit found, setting init release note");
@@ -57,10 +57,10 @@ async function run(): Promise<void> {
         return;
     }
 
-    if (tagCommit) {
-        const response = await getCommits(octokit, stableOwner, stableRepo, tagCommit, COMMIT_SHA);
+    if (tagCommit && latestTagName) {
+        const response = await getCommits(octokit, stableOwner, stableRepo, latestTagName, NIGHTLY_TAG);
         if (!response.response) {
-            core.error(`Failed to fetch commits between ${tagCommit} and ${COMMIT_SHA}: ${response.error}!`);
+            core.error(`Failed to fetch commits between ${latestTagName} and ${NIGHTLY_TAG}: ${response.error}!`);
             return;
         }
 
