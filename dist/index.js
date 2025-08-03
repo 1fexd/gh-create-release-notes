@@ -27182,7 +27182,7 @@ async function getCommits(octokit, owner, repo, lastCommitSha, commitSha) {
     }
 }
 exports.getCommits = getCommits;
-function createChangelog(owner, repo, tag, latestNightlyRelease, commits) {
+function createChangelog(owner, repo, previousTag, tag, commits) {
     const releaseLines = ["# Included commits", ""];
     const stableRepoBaseUrl = `https://github.com/${owner}/${repo}`;
     const compareBaseUrl = `${stableRepoBaseUrl}/compare/`;
@@ -27194,10 +27194,10 @@ function createChangelog(owner, repo, tag, latestNightlyRelease, commits) {
         const mdLink = createMarkdownLink(url, text);
         releaseLines.push(`* ${mdLink}`);
     }
-    if (latestNightlyRelease !== null) {
+    if (previousTag !== null) {
         releaseLines.push("");
-        const text = makeCompareString(wrapInlineCodeBlock(latestNightlyRelease.tagName), wrapInlineCodeBlock(tag));
-        const url = makeCompareString(compareBaseUrl + latestNightlyRelease.tagName, tag);
+        const text = makeCompareString(wrapInlineCodeBlock(previousTag), wrapInlineCodeBlock(tag));
+        const url = makeCompareString(compareBaseUrl + previousTag, tag);
         const mdLink = createMarkdownLink(url, text);
         releaseLines.push("Difference to latest stable release: " + mdLink);
     }
@@ -27292,23 +27292,23 @@ async function run() {
     const stableRepo = stableSplit[1];
     core.info(`Stable repo: ${stableOwner}/${stableRepo}`);
     core.info(`Nightly repo: ${nightlyOwner}/${nightlyRepo}`);
-    const latestNightlyRelease = await (0, changelog_1.queryLatestRelease)(octokit, nightlyOwner, nightlyRepo);
-    const tagCommit = latestNightlyRelease?.tagCommit?.oid;
-    const latestTagName = latestNightlyRelease?.tagName;
-    if (!latestNightlyRelease || !tagCommit || tagCommit === "0000000000000000000000000000000000000000") {
+    const previousRelease = await (0, changelog_1.queryLatestRelease)(octokit, nightlyOwner, nightlyRepo);
+    const previousTagCommit = previousRelease?.tagCommit?.oid;
+    const previousTag = previousRelease?.tagName;
+    if (!previousRelease || !previousTagCommit || previousTagCommit === "0000000000000000000000000000000000000000") {
         core.warning("No last commit found, setting init release note");
         core.setOutput("releaseNote", "* Initial release");
         return;
     }
-    if (tagCommit && latestTagName) {
-        const response = await (0, changelog_1.getCommits)(octokit, stableOwner, stableRepo, latestTagName, NIGHTLY_TAG);
+    if (previousTagCommit && previousTag) {
+        const response = await (0, changelog_1.getCommits)(octokit, stableOwner, stableRepo, previousTag, NIGHTLY_TAG);
         if (!response.response) {
-            core.error(`Failed to fetch commits between ${latestTagName} and ${NIGHTLY_TAG}: ${response.error}!`);
+            core.error(`Failed to fetch commits between ${previousTag} and ${NIGHTLY_TAG}: ${response.error}!`);
             return;
         }
         const compared = response.response.data;
         const commits = (0, MessageHelper_1.filterCommits)(compared.commits.reverse());
-        const releaseMessage = (0, changelog_1.createChangelog)(stableOwner, stableRepo, COMMIT_SHA, latestNightlyRelease, commits);
+        const releaseMessage = (0, changelog_1.createChangelog)(stableOwner, stableRepo, previousTag, NIGHTLY_TAG, commits);
         core.info(releaseMessage);
         core.setOutput("releaseNote", releaseMessage);
     }
