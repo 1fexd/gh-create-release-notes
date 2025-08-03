@@ -38,7 +38,7 @@ export async function getCommits(octokit: Octokit, owner: string, repo: string, 
     }
 }
 
-export function createChangelog(owner: string, repo: string, tag: string, latestNightlyRelease: Release | null, commits: Commit[]) {
+export function createChangelog(owner: string, repo: string, previousTag: string | null, tag: string, commits: Commit[]) {
     const releaseLines = ["# Included commits", ""];
     const stableRepoBaseUrl = `https://github.com/${owner}/${repo}`;
     const compareBaseUrl = `${stableRepoBaseUrl}/compare/`;
@@ -53,15 +53,15 @@ export function createChangelog(owner: string, repo: string, tag: string, latest
         releaseLines.push(`* ${mdLink}`);
     }
 
-    if (latestNightlyRelease !== null) {
+    if (previousTag !== null) {
         releaseLines.push("");
 
         const text = makeCompareString(
-            wrapInlineCodeBlock(latestNightlyRelease.tagName!),
+            wrapInlineCodeBlock(previousTag),
             wrapInlineCodeBlock(tag)
         );
 
-        const url = makeCompareString(compareBaseUrl + latestNightlyRelease.tagName, tag);
+        const url = makeCompareString(compareBaseUrl + previousTag, tag);
         const mdLink = createMarkdownLink(url, text);
 
         releaseLines.push("Difference to latest stable release: " + mdLink);

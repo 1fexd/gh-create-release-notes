@@ -13,6 +13,8 @@ inputs:
     description: "Hash of the previous commit"
   commit-sha:
     description: "Hash of this commit"
+  nightly-tag:
+    description: "Nightly tag of this build"
 
 runs:
   using: "node20"

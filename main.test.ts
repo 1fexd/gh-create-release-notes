@@ -20,12 +20,12 @@ test("test", async () => {
     const nightlyOwner = owner;
     const nightlyRepo = "nightly";
     // const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
-    const latestNightlyRelease : Release =  {
+    const previousRelease: Release = {
         tagCommit: null,
         tagName: "nightly-2025060402"
     };
     const compared = response.response!.data as CommitCompare;
     const commits = filterCommits(compared.commits.reverse());
-    const changelog = createChangelog(owner, repo, "nightly-2025061001", latestNightlyRelease, commits);
+    const changelog = createChangelog(owner, repo, previousRelease.tagName, "nightly-2025061001", commits);
     console.log(changelog);
 });

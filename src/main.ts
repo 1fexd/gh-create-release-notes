@@ -47,26 +47,26 @@ async function run(): Promise<void> {
     core.info(`Stable repo: ${stableOwner}/${stableRepo}`);
     core.info(`Nightly repo: ${nightlyOwner}/${nightlyRepo}`);
 
-    const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
-    const tagCommit = latestNightlyRelease?.tagCommit?.oid;
-    const latestTagName = latestNightlyRelease?.tagName;
+    const previousRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
+    const previousTagCommit = previousRelease?.tagCommit?.oid;
+    const previousTag = previousRelease?.tagName;
 
-    if (!latestNightlyRelease || !tagCommit || tagCommit === "0000000000000000000000000000000000000000") {
+    if (!previousRelease || !previousTagCommit || previousTagCommit === "0000000000000000000000000000000000000000") {
         core.warning("No last commit found, setting init release note");
         core.setOutput("releaseNote", "* Initial release");
         return;
     }
 
-    if (tagCommit && latestTagName) {
-        const response = await getCommits(octokit, stableOwner, stableRepo, latestTagName, NIGHTLY_TAG);
+    if (previousTagCommit && previousTag) {
+        const response = await getCommits(octokit, stableOwner, stableRepo, previousTag, NIGHTLY_TAG);
         if (!response.response) {
-            core.error(`Failed to fetch commits between ${latestTagName} and ${NIGHTLY_TAG}: ${response.error}!`);
+            core.error(`Failed to fetch commits between ${previousTag} and ${NIGHTLY_TAG}: ${response.error}!`);
             return;
         }
 
         const compared = response.response.data as CommitCompare;
         const commits = filterCommits(compared.commits.reverse());
-        const releaseMessage = createChangelog(stableOwner, stableRepo, COMMIT_SHA, latestNightlyRelease, commits);
+        const releaseMessage = createChangelog(stableOwner, stableRepo, previousTag, NIGHTLY_TAG, commits);
         core.info(releaseMessage);
         core.setOutput("releaseNote", releaseMessage);
     }
