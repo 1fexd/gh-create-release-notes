@@ -27097,28 +27097,43 @@ function wrappy (fn, cb) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.filterCommits = exports.checkCommit = exports.rewriteCommit = void 0;
+// 58902674
 const ignoreConfigs = [
     {
-        accountId: 1607653,
-        regex: /^Merge remote-tracking branch 'origin\/\w+'$/
+        // accountId: 1607653,
+        regexes: [/^Merge\s*(?:remote-tracking)?\s*branch '.+'$/]
+        // regex: /^Merge remote-tracking branch 'origin\/\w+'$/
     },
     {
-        regex: /.*Merge pull request #\d+ from weblate\/weblate-\w+-\w+\n\nTranslations update from Hosted Weblate$/
+        regexes: [/.*Merge pull request #\d+ from weblate\/weblate-\w+-\w+\n\nTranslations update from Hosted Weblate$/]
     },
     {
-        regex: /^chore: Dependencies$/,
+        regexes: [/^chore:.+$/]
     },
+    {
+        regexes: [
+            /^wip.+$/,
+            /^fix: Build$/,
+            /^fix: Import$/
+        ]
+    }
 ];
 const rewriteConfigs = [
     {
-        regex: /^Translated using Weblate \((\w+)\)\n\nCurrently translated at (\d+\.\d)% \((\d+) of (\d+) strings\)\n\nTranslation: \w+\/\w+\nTranslate-URL: .+$/,
+        regex: /^Translated using Weblate \((.+)\)\n\nCurrently translated at (\d+\.\d)% \((\d+) of (\d+) strings\)\n\nTranslation: .+\/.+\nTranslate-URL: .+$/,
         replaceWith: "Translated: $1 ($2%, $3 of $4 strings)"
     }
 ];
 function check(config, commit) {
     const accountFlag = !config.accountId || commit.author?.id === config.accountId;
-    const messageFlag = config.regex.test(commit.commit.message);
-    return accountFlag && messageFlag;
+    if (!accountFlag)
+        return false;
+    for (const regex of config.regexes) {
+        const messageFlag = regex.test(commit.commit.message);
+        if (messageFlag)
+            return true;
+    }
+    return false;
 }
 function rewriteCommit(commit) {
     const message = commit.commit.message;

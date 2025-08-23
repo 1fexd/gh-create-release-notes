@@ -5,27 +5,26 @@ import { filterCommits } from "./src/MessageHelper";
 
 test("test", async () => {
     const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-    const lastCommitSha = "7fbd37804af31dc195d6f9c3e52a7fc1548298d0";
-    const commitSha = "257f6686df2b2ad4291383c124f570ad8e9bd04c";
+
+    // const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
+    const previousRelease: Release = {
+        tagCommit: null,
+        tagName: "nightly-2025080301"
+    };
+    const latestRelease = "nightly-2025082303"
+
     const owner = "LinkSheet";
     const repo = "LinkSheet";
     const response = await getCommits(
         octokit,
         owner,
         repo,
-        lastCommitSha,
-        commitSha
+        previousRelease.tagName!,
+        latestRelease
     );
 
-    const nightlyOwner = owner;
-    const nightlyRepo = "nightly";
-    // const latestNightlyRelease = await queryLatestRelease(octokit, nightlyOwner, nightlyRepo);
-    const previousRelease: Release = {
-        tagCommit: null,
-        tagName: "nightly-2025060402"
-    };
     const compared = response.response!.data as CommitCompare;
     const commits = filterCommits(compared.commits.reverse());
-    const changelog = createChangelog(owner, repo, previousRelease.tagName, "nightly-2025061001", commits);
+    const changelog = createChangelog(owner, repo, previousRelease.tagName, latestRelease, commits);
     console.log(changelog);
 });
